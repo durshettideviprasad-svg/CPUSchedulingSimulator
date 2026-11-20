@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPU Scheduling Visual Simulator</title>
+<style>
+:root{--bg:#0b1020;--panel:#131c32;--panel2:#192541;--line:#2a3858;--text:#eef3ff;--muted:#a8b5d1;--accent:#79a9ff;--green:#4bd6a0;--yellow:#ffd166;--red:#ff7b89}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#0b1020,#111b32);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Arial,sans-serif}
+header{padding:28px 5vw 18px;border-bottom:1px solid var(--line)}h1{margin:0 0 6px;font-size:clamp(25px,4vw,38px)}header p{margin:0;color:var(--muted)}
+main{max-width:1250px;margin:auto;padding:24px 20px 60px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:18px;box-shadow:0 12px 30px #0002}.wide{grid-column:1/-1}h2{font-size:19px;margin:0 0 14px}h3{font-size:16px;margin:18px 0 8px;color:#dbe6ff}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}.field{display:flex;flex-direction:column;gap:5px;flex:1;min-width:105px}label{font-size:12px;color:var(--muted)}input,select{background:#0d162a;border:1px solid #344566;border-radius:8px;color:var(--text);padding:10px;min-width:0;width:100%}
+button{border:0;border-radius:8px;padding:10px 15px;background:var(--accent);color:#071329;font-weight:700;cursor:pointer}button:hover{filter:brightness(1.1)}button.secondary{background:#2a3a5d;color:var(--text)}button.danger{background:#613344;color:#ffe4e8}button:disabled{opacity:.5;cursor:not-allowed}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}th,td{text-align:center;padding:9px 7px;border-bottom:1px solid var(--line)}th{color:#b8c9ec;font-weight:600}td button{padding:5px 9px;font-size:12px}
+.hint,.muted{color:var(--muted);font-size:13px}.status{color:var(--green);font-weight:700}
+.gantt{display:flex;align-items:stretch;overflow-x:auto;padding:15px 4px 4px;min-height:86px}.block{min-width:58px;flex:var(--dur) 0 0;border:2px solid #0d162a;border-radius:8px;padding:8px 5px;text-align:center;color:#071329;font-weight:800;position:relative}.block small{display:block;font-size:11px;font-weight:600}.block.active{outline:3px solid var(--yellow);outline-offset:2px}.timeline{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin:0 5px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}.metric{background:var(--panel2);padding:12px;border-radius:10px}.metric b{display:block;font-size:20px}.metric span{font-size:12px;color:var(--muted)}
+.log{max-height:260px;overflow:auto;padding-left:23px}.log li{padding:5px 0;color:#d8e2f7}.log li::marker{color:var(--accent)}
+pre{white-space:pre-wrap;overflow:auto;background:#0a1325;border:1px solid var(--line);border-radius:9px;padding:14px;color:#dce8ff;font-size:13px}
+details{border-top:1px solid var(--line);padding:12px 0}summary{cursor:pointer;font-weight:700;color:#dce7ff}details p,details li{color:#c1cde3}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.tabs button{background:#263657;color:var(--text)}.tabs button.active{background:var(--accent);color:#071329}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.metrics{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header><h1>CPU Scheduling Visual Simulator</h1><p>Explore FCFS, SJF, Round Robin and Multilevel Feedback Queue scheduling — offline, in one file.</p></header>
+<main>
+<div class="grid">
+<section class="panel">
+<h2>1. Add processes</h2>
+<div class="row">
+<div class="field"><label for="pid">Process ID</label><input id="pid" value="P1" maxlength="8"></div>
+<div class="field"><label for="arrival">Arrival time</label><input id="arrival" type="number" min="0" value="0"></div>
+<div class="field"><label for="burst">Burst time</label><input id="burst" type="number" min="1" value="5"></div>
+<div class="field"><label for="priority">Priority (lower = higher)</label><input id="priority" type="number" min="1" value="1"></div>
+<button id="addBtn">Add process</button>
+</div>
+<p class="hint">Arrival time and burst time must be non-negative/positive integers. Add at least one process before running.</p>
+<div class="row"><button class="secondary" id="sampleBtn">Load sample data</button><button class="danger" id="clearBtn">Clear all</button></div>
+<div style="overflow-x:auto"><table><thead><tr><th>Process</th><th>Arrival</th><th>Burst</th><th>Priority</th><th>Remove</th></tr></thead><tbody id="processRows"><tr><td colspan="5" class="muted">No processes added yet.</td></tr></tbody></table></div>
+</section>
+<section class="panel">
+<h2>2. Choose scheduling algorithm</h2>
+<div class="field"><label for="algorithm">Algorithm</label><select id="algorithm"><option value="fcfs">FCFS (First Come First Served)</option><option value="sjf">SJF (Non-preemptive)</option><option value="srtf">SRTF (Preemptive SJF)</option><option value="rr">Round Robin</option><option value="mlfq">Multilevel Feedback Queue (3 levels)</option></select></div>
+<div class="row" style="margin-top:12px">
+<div class="field" id="quantumWrap"><label for="quantum">Time quantum (RR / MLFQ)</label><input id="quantum" type="number" min="1" value="2"></div>
+<div class="field"><label for="mlq2">MLFQ level 2 quantum</label><input id="mlq2" type="number" min="1" value="4"></div>
+</div>
+<div class="row" style="margin-top:14px"><button id="runBtn">Run simulation</button><button class="secondary" id="stepBtn">Step through</button><button class="secondary" id="nextBtn" disabled>Next step</button></div>
+<p class="hint">FCFS and SJF are non-preemptive. SRTF, RR and MLFQ can switch processes before completion.</p>
+<div id="algorithmNote" class="hint">FCFS runs processes in order of arrival.</div>
+</section>
+<section class="panel wide">
+<h2>3. Gantt chart</h2><p class="muted">Each colored block represents one CPU execution interval. Idle blocks indicate that no process has arrived yet.</p>
+<div id="gantt" class="gantt"><span class="muted">Run the simulation to draw the Gantt chart.</span></div><div id="ticks" class="timeline"></div>
+<div class="metrics">
+<div class="metric"><b id="avgTAT">—</b><span>Average turnaround time</span></div><div class="metric"><b id="avgWT">—</b><span>Average waiting time</span></div><div class="metric"><b id="throughput">—</b><span>Throughput (processes / time)</span></div><div class="metric"><b id="makespan">—</b><span>Total elapsed time</span></div>
+</div>
+<div style="overflow-x:auto"><table><thead><tr><th>Process</th><th>Completion (CT)</th><th>Turnaround (TAT = CT − AT)</th><th>Waiting (WT = TAT − BT)</th></tr></thead><tbody id="resultRows"><tr><td colspan="4" class="muted">Results appear here after simulation.</td></tr></tbody></table></div>
+</section>
+<section class="panel">
+<h2>4. Operation log</h2><p class="muted">Plain-English trace of CPU decisions, arrivals, execution and completion.</p><ol class="log" id="log"><li>Waiting for simulation.</li></ol>
+</section>
+<section class="panel">
+<h2>5. Lab procedure</h2>
+<h3>AIM</h3><p>To simulate CPU scheduling algorithms and calculate completion time, turnaround time, waiting time and average performance measures.</p>
+<h3>Procedure</h3><ol><li>Enter each process ID, arrival time, burst time and priority.</li><li>Select a scheduling algorithm and enter its time quantum if required.</li><li>Click <b>Run simulation</b> to generate the schedule and Gantt chart.</li><li>Observe the execution order and operation log.</li><li>Read CT, TAT and WT from the result table and compare the averages.</li></ol>
+<h3>How to extract values from a problem</h3><ul><li><b>AT:</b> time at which a process enters the ready queue.</li><li><b>BT:</b> CPU time required by the process.</li><li><b>Priority:</b> use only if the question specifies a priority-based rule; here it is used to order MLFQ arrivals only as a tie-breaker.</li><li><b>Time quantum:</b> maximum time slice for RR. For MLFQ, level 1 uses this value and level 2 uses its separate quantum.</li></ul>
+</section>
+<section class="panel wide">
+<h2>6. Algorithm reference</h2>
+<div class="tabs"><button class="active" data-tab="fcfsTab">FCFS</button><button data-tab="sjfTab">SJF</button><button data-tab="rrTab">RR</button><button data-tab="mlfqTab">MLFQ</button></div>
+<div id="fcfsTab" class="tabcontent"><b>Pseudocode — FCFS</b><pre>Sort processes by arrival time (stable order).
+time = 0
+For each process:
+    If time &lt; arrival: time = arrival
+    start = time
+    time = time + burst
+    completion = time
+    TAT = completion - arrival
+    WT = TAT - burst</pre><p>FCFS is simple and non-preemptive. A process that arrives first gets the CPU first.</p></div>
+<div id="sjfTab" class="tabcontent" hidden><b>Pseudocode — non-preemptive SJF</b><pre>time = 0; completed = 0
+While completed &lt; number of processes:
+    Find arrived, unfinished process with smallest burst
+    If none: advance time to next arrival
+    Else: run it until completion
+          calculate CT, TAT and WT</pre><p>SJF chooses the shortest burst among processes that have already arrived. It does not interrupt the running process.</p></div>
+<div id="rrTab" class="tabcontent" hidden><b>Pseudocode — Round Robin</b><pre>Put arrived processes in ready queue
+While unfinished processes remain:
+    If queue empty: jump to next arrival
+    Else:
+        remove front process
+        run for min(quantum, remaining burst)
+        add newly arrived processes to queue
+        If process remains: add it to queue tail
+        Else: record completion time</pre><p>RR gives each ready process a fair CPU time slice. A smaller quantum improves responsiveness but increases context-switch overhead in real systems.</p></div>
+<div id="mlfqTab" class="tabcontent" hidden><b>Pseudocode — simplified 3-level MLFQ</b><pre>New processes enter Queue 1 (highest priority)
+Queue 1: Round Robin using quantum Q
+Queue 2: Round Robin using quantum 2Q
+Queue 3: FCFS (runs until completion)
+If a process uses its full quantum and is unfinished:
+    demote it to the next lower queue
+Always choose the highest non-empty queue</pre><p>This teaching version uses three queues, demotes CPU-bound jobs after their full time slice, and does not implement priority boosts or I/O blocking.</p></div>
+<h3>C reference code — FCFS</h3><p class="muted">This is a compact lab reference for FCFS. The browser simulator itself is implemented in JavaScript.</p>
+<pre>#include &lt;stdio.h&gt;
+int main(void) {
+    int n, i, p[50], at[50], bt[50], ct[50], tat[50], wt[50];
+    int time = 0, temp;
+    printf("Enter number of processes: ");
+    scanf("%d", &amp;n);
+    for (i = 0; i &lt; n; i++) {
+        printf("Enter PID, arrival time, burst time: ");
+        scanf("%d%d%d", &amp;p[i], &amp;at[i], &amp;bt[i]);
+    }
+    /* Sort by arrival time; ties retain input order. */
+    for (i = 0; i &lt; n - 1; i++) {
+        for (int j = i + 1; j &lt; n; j++) {
+            if (at[i] &gt; at[j]) {
+                temp=at[i]; at[i]=at[j]; at[j]=temp;
+                temp=bt[i]; bt[i]=bt[j]; bt[j]=temp;
+                temp=p[i]; p[i]=p[j]; p[j]=temp;
+            }
+        }
+    }
+    for (i = 0; i &lt; n; i++) {
+        if (time &lt; at[i]) time = at[i];
+        time += bt[i]; ct[i] = time;
+        tat[i] = ct[i] - at[i];
+        wt[i] = tat[i] - bt[i];
+        printf("P%d CT=%d TAT=%d WT=%d\\n",
+               p[i], ct[i], tat[i], wt[i]);
+    }
+    return 0;
+}</pre>
+<h3>Sample input and output</h3><pre>Input:
+Process   AT   BT
+P1        0    5
+P2        1    3
+P3        2    1
+Algorithm: FCFS
+
+Expected:
+Gantt: | P1 | P2 | P3 |
+Time:    0    5    8    9
+P1: CT=5, TAT=5, WT=0
+P2: CT=8, TAT=7, WT=4
+P3: CT=9, TAT=7, WT=6
+Average TAT = 6.33
+Average WT  = 3.33</pre>
+<h3>FAQ</h3>
+<details><summary>How do I calculate turnaround time?</summary><p>TAT = Completion Time − Arrival Time.</p></details>
+<details><summary>How do I calculate waiting time?</summary><p>WT = Turnaround Time − Burst Time.</p></details>
+<details><summary>Why is there an IDLE block?</summary><p>The CPU is idle when no process has arrived and no process is ready to execute.</p></details>
+<details><summary>Which algorithm is preemptive?</summary><p>SRTF and RR are preemptive. This simulator's FCFS and SJF are non-preemptive. MLFQ can switch between queues at time-slice boundaries.</p></details>
+<details><summary>Does SJF mean the shortest process overall?</summary><p>No. Non-preemptive SJF chooses the shortest burst only from processes that have arrived and are ready at the decision time.</p></details>
+</section>
+</div>
+<footer class="muted" style="text-align:center;padding:25px 0 0">CPU Scheduling Lab Simulator · Pure HTML, CSS and JavaScript · Works offline</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let processes=[], lastResult=null, playback=null, playbackIndex=0;
+const palette=['#8fc5ff','#7de0bd','#ffd27d','#c5a4ff','#ff9fae','#9ce2ec','#f2b5e8','#b9d98b'];
+function addProcess(){
+ const id=$('pid').value.trim(), at=Number($('arrival').value), bt=Number($('burst').value), pr=Number($('priority').value);
+ if(!id){alert('Enter a process ID.');return}
+ if(processes.some(p=>p.id===id)){alert('Process ID must be unique.');return}
+ if(!Number.isInteger(at)||at<0||!Number.isInteger(bt)||bt<1||!Number.isInteger(pr)||pr<1){alert('Arrival must be a non-negative integer; burst and priority must be positive integers.');return}
+ processes.push({id,at,bt,priority:pr,index:processes.length});renderProcesses();
+ $('pid').value='P'+(processes.length+1);$('arrival').value='0';$('burst').value='5';
+}
+function renderProcesses(){
+ $('processRows').innerHTML=processes.length?processes.map((p,i)=>`<tr><td>${esc(p.id)}</td><td>${p.at}</td><td>${p.bt}</td><td>${p.priority}</td><td><button class="danger" onclick="removeProcess(${i})">Remove</button></td></tr>`).join(''):'<tr><td colspan="5" class="muted">No processes added yet.</td></tr>';
+}
+function removeProcess(i){processes.splice(i,1);processes.forEach((p,j)=>p.index=j);renderProcesses();clearOutput()}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function clearOutput(){lastResult=null;playback=null;$('gantt').innerHTML='<span class="muted">Run the simulation to draw the Gantt chart.</span>';$('ticks').innerHTML='';$('resultRows').innerHTML='<tr><td colspan="4" class="muted">Results appear here after simulation.</td></tr>';$('log').innerHTML='<li>Waiting for simulation.</li>';$('avgTAT').textContent=$('avgWT').textContent=$('throughput').textContent=$('makespan').textContent='—';$('nextBtn').disabled=true}
+function schedule(){
+ const alg=$('algorithm').value, q=Number($('quantum').value), q2=Number($('mlq2').value);
+ if(!processes.length){alert('Add at least one process first.');return null}
+ if((alg==='rr'||alg==='mlfq')&&(!Number.isInteger(q)||q<1)){alert('Time quantum must be a positive integer.');return null}
+ if(alg==='mlfq'&&(!Number.isInteger(q2)||q2<1)){alert('Level 2 quantum must be a positive integer.');return null}
+ const ps=processes.map(p=>({...p,rem:p.bt,ct:null})), seg=[], logs=[];
+ let t=0, done=0, guard=0;
+ const addLog=s=>logs.push(s), sortArrival=(a,b)=>a.at-b.at||a.index-b.index;
+ function run(p,dur){const start=t;t+=dur;p.rem-=dur;let last=seg[seg.length-1];if(last&&last.id===p.id&&last.end===start)last.end=t;else seg.push({id:p.id,start,end:t});addLog(`${p.id} executes from time ${start} to ${t} (${dur} time unit${dur===1?'':'s'}).`);if(p.rem===0){p.ct=t;done++;addLog(`${p.id} completes at time ${t}.`)}}
+ function idleTo(next){if(next>t){seg.push({id:'IDLE',start:t,end:next});addLog(`CPU is idle from time ${t} to ${next}; no process is ready.`);t=next}}
+ if(alg==='fcfs'||alg==='sjf'){
+   const waiting=new Set();
+   while(done<ps.length&&guard++<100000){
+     const ready=ps.filter(p=>p.rem>0&&p.at<=t);
+     if(!ready.length){const next=Math.min(...ps.filter(p=>p.rem>0).map(p=>p.at));idleTo(next);continue}
+     ready.sort(alg==='fcfs'?sortArrival:(a,b)=>a.bt-b.bt||sortArrival(a,b));
+     const p=ready[0];addLog(`${alg.toUpperCase()} selects ${p.id} from the ready queue.`);run(p,p.rem);
+   }
+ }else if(alg==='srtf'){
+   while(done<ps.length&&guard++<100000){
+     let ready=ps.filter(p=>p.rem>0&&p.at<=t).sort((a,b)=>a.rem-b.rem||sortArrival(a,b));
+     if(!ready.length){idleTo(Math.min(...ps.filter(p=>p.rem>0).map(p=>p.at)));continue}
+     const p=ready[0], nextArrival=ps.filter(x=>x.rem>0&&x.at>t).reduce((m,x)=>Math.min(m,x.at),Infinity);
+     const dur=Math.min(p.rem,nextArrival-t);addLog(`SRTF selects ${p.id}, which has ${p.rem} unit(s) remaining.`);run(p,dur);
+   }
+ }else if(alg==='rr'){
+   const queue=[], arrived=new Set();let cursor=0;
+   function enqueue(){ps.filter(p=>p.rem>0&&!arrived.has(p.id)&&p.at<=t).sort(sortArrival).forEach(p=>{queue.push(p);arrived.add(p.id);addLog(`${p.id} arrives and enters the ready queue.`)})}
+   enqueue();
+   while(done<ps.length&&guard++<100000){
+     if(!queue.length){const next=Math.min(...ps.filter(p=>p.rem>0).map(p=>p.at));idleTo(next);enqueue();continue}
+     const p=queue.shift();addLog(`Round Robin gives ${p.id} a time slice of up to ${q}.`);const dur=Math.min(q,p.rem);run(p,dur);enqueue();if(p.rem>0){queue.push(p);addLog(`${p.id} is moved to the back of the ready queue with ${p.rem} unit(s) remaining.`)}
+   }
+ }else{
+   const queues=[[],[],[]],arrived=new Set();
+   function enqueue(){ps.filter(p=>p.rem>0&&!arrived.has(p.id)&&p.at<=t).sort(sortArrival).forEach(p=>{queues[0].push({p,level:0});arrived.add(p.id);addLog(`${p.id} arrives in MLFQ Queue 1 (highest priority).`)})}
+   enqueue();
+   while(done<ps.length&&guard++<100000){
+     if(!queues.some(x=>x.length)){const next=Math.min(...ps.filter(p=>p.rem>0).map(p=>p.at));idleTo(next);enqueue();continue}
+     let level=queues.findIndex(x=>x.length), item=queues[level].shift(), p=item.p;
+     const quantum=level===0?q:level===1?q2:p.rem;
+     addLog(`MLFQ selects ${p.id} from Queue ${level+1}; its time slice is ${quantum}.`);
+     const dur=Math.min(quantum,p.rem);run(p,dur);enqueue();
+     if(p.rem>0){const nl=Math.min(level+1,2);queues[nl].push({p,level:nl});addLog(`${p.id} uses its full slice and is demoted to Queue ${nl+1}.`)}
+   }
+ }
+ if(guard>=100000){alert('Simulation stopped because of an unexpected scheduling loop.');return null}
+ const results=ps.map(p=>({id:p.id,at:p.at,bt:p.bt,ct:p.ct,tat:p.ct-p.at,wt:p.ct-p.at-p.bt})).sort((a,b)=>a.index-b.index);
+ const avgTAT=results.reduce((s,p)=>s+p.tat,0)/results.length,avgWT=results.reduce((s,p)=>s+p.wt,0)/results.length;
+ addLog(`All processes have completed. Average TAT = ${avgTAT.toFixed(2)}; average WT = ${avgWT.toFixed(2)}.`);
+ return {seg,logs,results,avgTAT,avgWT,end:t};
+}
+function draw(result, upto=result.seg.length-1){
+ const shown=result.seg.slice(0,upto+1);$('gantt').innerHTML=shown.map((s,i)=>{let color=s.id==='IDLE'?'#667085':palette[Math.max(0,processes.findIndex(p=>p.id===s.id))%palette.length];return `<div class="block ${i===upto&&playback?'active':''}" style="--dur:${s.end-s.start};background:${color}" title="${esc(s.id)}: ${s.start}–${s.end}">${esc(s.id)}<small>${s.start}–${s.end}</small></div>`}).join('');
+ if(shown.length){$('ticks').innerHTML=`<span>${shown[0].start}</span><span>${shown[shown.length-1].end}</span>`}else $('ticks').innerHTML='';
+}
+function showResults(r){
+ $('resultRows').innerHTML=r.results.map(p=>`<tr><td>${esc(p.id)}</td><td>${p.ct}</td><td>${p.tat}</td><td>${p.wt}</td></tr>`).join('');
+ $('avgTAT').textContent=r.avgTAT.toFixed(2);$('avgWT').textContent=r.avgWT.toFixed(2);$('throughput').textContent=(r.results.length/r.end).toFixed(3);$('makespan').textContent=r.end;
+}
+function runAll(){playback=null;const r=schedule();if(!r)return;lastResult=r;draw(r);showResults(r);$('log').innerHTML=r.logs.map(x=>`<li>${esc(x)}</li>`).join('')}
+function startSteps(){const r=schedule();if(!r)return;lastResult=r;playback=true;playbackIndex=0;draw(r,-1);showResults(r);$('log').innerHTML='<li>Step mode started. Press Next step to reveal each CPU execution interval.</li>';$('nextBtn').disabled=false}
+function nextStep(){if(!playback||!lastResult)return; if(playbackIndex<lastResult.seg.length){draw(lastResult,playbackIndex);$('log').innerHTML=lastResult.logs.slice(0,Math.min(lastResult.logs.length,playbackIndex*2+2)).map(x=>`<li>${esc(x)}</li>`).join('');playbackIndex++}if(playbackIndex>=lastResult.seg.length){$('nextBtn').disabled=true;$('log').innerHTML=lastResult.logs.map(x=>`<li>${esc(x)}</li>`).join('');playback=false}}
+$('addBtn').onclick=addProcess;$('runBtn').onclick=runAll;$('stepBtn').onclick=startSteps;$('nextBtn').onclick=nextStep;
+$('clearBtn').onclick=()=>{processes=[];renderProcesses();clearOutput()};
+$('sampleBtn').onclick=()=>{processes=[{id:'P1',at:0,bt:5,priority:2,index:0},{id:'P2',at:1,bt:3,priority:1,index:1},{id:'P3',at:2,bt:1,priority:3,index:2},{id:'P4',at:4,bt:2,priority:2,index:3}];renderProcesses();clearOutput()};
+$('algorithm').onchange=()=>{$('algorithmNote').textContent=({fcfs:'FCFS: run in arrival order; once started, a process runs to completion.',sjf:'SJF: choose the shortest burst among processes already in the ready queue.',srtf:'SRTF: always run the arrived process with the smallest remaining burst.',rr:'Round Robin: give each ready process up to one time quantum.',mlfq:'MLFQ: new jobs enter Queue 1; jobs using a full slice move to lower-priority queues.'})[$('algorithm').value];$('quantumWrap').style.opacity=['rr','mlfq'].includes($('algorithm').value)?'1':'.55'};
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tabcontent').forEach(x=>x.hidden=x.id!==b.dataset.tab)});
+renderProcesses();$('algorithm').onchange();
+</script>
+</body>
+</html>
